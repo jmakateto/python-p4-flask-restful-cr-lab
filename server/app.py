@@ -1,44 +1,55 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_migrate import Migrate
 from flask_restful import Api, Resource
 from models import db, Plant
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///plants.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.json.compact = True
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///plants.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.json.compact = False
+
+db.init_app(app)
 
 migrate = Migrate(app, db)
-db.init_app(app)
 
 api = Api(app)
 
-class Plants(Resource):
+
+class PlantsIndex(Resource):
     def get(self):
         plants = Plant.query.all()
-        return jsonify([plant.serialize() for plant in plants])
+        response_dict_list = [plant.serialize() for plant in plants]
+        response = make_response(jsonify(response_dict_list), 200)
+        return response
 
-class PlantByID(Resource):
-    def get(self, plant_id):
-        plant = Plant.query.get(plant_id)
+
+class PlantShow(Resource):
+    def get(self, id):
+        plant = Plant.query.filter_by(id=id).first()
         if plant:
-            return jsonify(plant.serialize())
+            response_dict = plant.serialize()
+            response = make_response(jsonify(response_dict), 200)
         else:
-            return jsonify({"message": "Plant not found"}), 404
+            response = make_response(jsonify({"error": "Plant not found"}), 404)
+        return response
 
+
+class PlantCreate(Resource):
     def post(self):
         data = request.get_json()
-        new_plant = Plant(
-            name=data['name'],
-            image=data['image'],
-            price=data['price']
-        )
+        new_plant = Plant(name=data["name"], image=data["image"], price=data["price"])
         db.session.add(new_plant)
         db.session.commit()
-        return jsonify(new_plant.serialize()), 201
 
-api.add_resource(Plants, '/plants')
-api.add_resource(PlantByID, '/plants/<int:plant_id>')
+        response_dict = new_plant.serialize()
+        response = make_response(jsonify(response_dict), 201)
+        return response
 
-if __name__ == '__main__':
-    app.run(port=5555, debug=True)
+
+api.add_resource(PlantsIndex, "/plants")
+api.add_resource(PlantShow, "/plants/<int:id>")
+api.add_resource(PlantCreate, "/plants")
+
+
+if __name__ == "__main__":
+    app.run(port=3000)
